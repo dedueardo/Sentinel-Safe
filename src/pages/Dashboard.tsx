@@ -1,11 +1,11 @@
 import React, { useState } from 'react'
-import { useCameras } from '../contexts/CameraContext'
 import CameraCard from '../components/cameras/CameraCard'
 import CameraFormModal from '../components/cameras/CameraFormModal'
 import { ViewColumnsIcon } from '@heroicons/react/24/outline'
+import { useCameras } from '../contexts/CameraContext'
 
 function Dashboard() {
-  const { cameras, updateCamera, isLoading } = useCameras()
+  const { cameras, addCamera, updateCamera } = useCameras()
   const [layout, setLayout] = useState<'2x2' | '3x3' | '4x4'>('3x3')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingCamera, setEditingCamera] = useState<any>(null)
@@ -16,12 +16,14 @@ function Dashboard() {
     '4x4': 'grid-cols-4',
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      </div>
-    )
+  const handleSubmit = (data: any) => {
+    if (editingCamera) {
+      updateCamera(editingCamera.id, data)
+    } else {
+      addCamera(data)
+    }
+    setIsModalOpen(false)
+    setEditingCamera(null)
   }
 
   return (
@@ -46,21 +48,37 @@ function Dashboard() {
               </button>
             ))}
           </div>
+          
+          <button
+            onClick={() => {
+              setEditingCamera(null)
+              setIsModalOpen(true)
+            }}
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            Adicionar Câmera
+          </button>
         </div>
       </div>
 
       <div className={`grid ${gridConfig[layout]} gap-6`}>
-        {cameras.map((camera) => (
-          <CameraCard
-            key={camera.id}
-            name={camera.name}
-            status={camera.status}
-            onSettings={() => {
-              setEditingCamera(camera)
-              setIsModalOpen(true)
-            }}
-          />
-        ))}
+        {cameras.length === 0 ? (
+          <div className="col-span-full flex flex-col items-center justify-center p-12 bg-white rounded-lg shadow">
+            <p className="text-gray-500">Nenhuma câmera cadastrada</p>
+          </div>
+        ) : (
+          cameras.map((camera) => (
+            <CameraCard
+              key={camera.id}
+              name={camera.name}
+              status={camera.status}
+              onSettings={() => {
+                setEditingCamera(camera)
+                setIsModalOpen(true)
+              }}
+            />
+          ))
+        )}
       </div>
 
       <CameraFormModal
@@ -69,13 +87,7 @@ function Dashboard() {
           setIsModalOpen(false)
           setEditingCamera(null)
         }}
-        onSubmit={(data) => {
-          if (editingCamera) {
-            updateCamera(editingCamera.id, data)
-          }
-          setIsModalOpen(false)
-          setEditingCamera(null)
-        }}
+        onSubmit={handleSubmit}
         initialData={editingCamera}
       />
     </div>
