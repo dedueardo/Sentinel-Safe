@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { camerasService } from '../services/cameras';
 import type { Camera } from '../types/camera';
 import { useAuth } from './AuthContext';
-import { onWebSocketMessage } from '../services/websocket';
+import { connectWebSocket, onWebSocketMessage } from '../services/websocket';
 import toast from 'react-hot-toast';
 
 interface CameraContextData {
@@ -21,7 +21,7 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, token } = useAuth(); // token do AuthContext
 
   const fetchCameras = useCallback(async () => {
     setLoading(true);
@@ -38,21 +38,30 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && token) {
       fetchCameras();
 
+      // Conecta WebSocket com token
+      connectWebSocket(token);
+
+      // Listener para atualizar status das câmeras
       const handleStatusUpdate = (data: { payload: { id: number; status: 'online' | 'offline' } }) => {
         const { id, status } = data.payload;
-        setCameras((prevCameras) =>
-          prevCameras.map((camera) =>
-            camera.id === id.toString() ? { ...camera, status } : camera
+        setCameras((prev) =>
+          prev.map((camera) =>
+            camera.id.toString() === id.toString() ? { ...camera, status } : camera
           )
         );
       };
+
       const unsubscribe = onWebSocketMessage('status_update', handleStatusUpdate);
-      return () => unsubscribe();
+
+      // Cleanup ao desmontar provider
+      return () => {
+        unsubscribe();
+      };
     }
-  }, [isAuthenticated, fetchCameras]);
+  }, [isAuthenticated, token, fetchCameras]);
 
   const addCamera = useCallback(async (data: Omit<Camera, 'id' | 'status' | 'lastUpdated'>) => {
     await toast.promise(
@@ -71,7 +80,9 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
     await toast.promise(
       camerasService.update(id, data).then(() => {
         setCameras((prev) =>
-          prev.map((cam) => (cam.id.toString() === id ? { ...cam, ...data, lastUpdated: new Date().toISOString() } : cam))
+          prev.map((cam) =>
+            cam.id.toString() === id ? { ...cam, ...data, lastUpdated: new Date().toISOString() } : cam
+          )
         );
       }),
       {
@@ -114,8 +125,6 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
 
 export function useCameras() {
   const context = useContext(CameraContext);
-  if (context === undefined) {
-    throw new Error('useCameras deve ser usado dentro de um CameraProvider');
-  }
+  if (!context) throw new Error('useCameras deve ser usado dentro de um CameraProvider');
   return context;
 }

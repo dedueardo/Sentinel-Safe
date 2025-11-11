@@ -1,72 +1,68 @@
-// URL do seu servidor WebSocket
-const WS_URL = 'ws://localhost:3000';
-
 let socket: WebSocket | null = null;
 
-// Callbacks que serão registrados pelos componentes/contextos
-const listeners: { [key: string]: Array<(data: any) => void> } = {};
+// Callbacks registrados por tipo de mensagem
+const listeners: { [type: string]: Array<(data: any) => void> } = {};
 
-// Função para conectar ao servidor
-export const connectWebSocket = () => {
-  // Evita múltiplas conexões
+// 🔹 Conecta ao WebSocket, passando token JWT
+export const connectWebSocket = (token: string) => {
   if (socket && socket.readyState === WebSocket.OPEN) {
-    console.log('WebSocket já está conectado.');
+    console.log("WebSocket já está conectado.");
     return;
   }
 
+  // Passa token na query string
+  const WS_URL = `ws://localhost:3000/?token=${token}`;
   socket = new WebSocket(WS_URL);
 
   socket.onopen = () => {
-    console.log('WebSocket conectado com sucesso.');
+    console.log("WebSocket conectado com sucesso.");
   };
 
   socket.onmessage = (event) => {
     try {
-      const parsedData = JSON.parse(event.data);
-      
-      // Se houver um 'type' na mensagem, notifica os listeners daquele tipo
-      if (parsedData.type && listeners[parsedData.type]) {
-        listeners[parsedData.type].forEach(callback => callback(parsedData));
+      const parsed = JSON.parse(event.data);
+
+      // Notifica listeners específicos
+      if (parsed.type && listeners[parsed.type]) {
+        listeners[parsed.type].forEach((cb) => cb(parsed));
       }
-      
-      // Notifica também os listeners 'gerais'
-      if (listeners['*']) {
-        listeners['*'].forEach(callback => callback(parsedData));
+
+      // Notifica listeners globais
+      if (listeners["*"]) {
+        listeners["*"].forEach((cb) => cb(parsed));
       }
-    } catch (error) {
-      console.error('Erro ao processar mensagem do WebSocket:', error);
+    } catch (err) {
+      console.error("Erro ao processar mensagem do WebSocket:", err);
     }
   };
 
   socket.onclose = () => {
-    console.log('WebSocket desconectado. Tentando reconectar em 5 segundos...');
-    socket = null; // Limpa a instância para permitir reconexão
-    setTimeout(connectWebSocket, 5000); // Tenta reconectar após 5 segundos
+    console.log("WebSocket desconectado. Tentando reconectar em 5s...");
+    socket = null;
+    // ❌ Reconexão automática removida para evitar loop infinito
   };
 
-  socket.onerror = (error) => {
-    console.error('Erro no WebSocket:', error);
-    socket?.close(); // Força o fechamento para acionar o 'onclose' e a reconexão
+  socket.onerror = (err) => {
+    console.error("Erro no WebSocket:", err);
+    socket?.close();
   };
 };
 
-// Função para componentes se registrarem para ouvir tipos específicos de eventos
+// 🔹 Registrar listener para um tipo de mensagem
 export const onWebSocketMessage = (type: string, callback: (data: any) => void) => {
-  if (!listeners[type]) {
-    listeners[type] = [];
-  }
+  if (!listeners[type]) listeners[type] = [];
   listeners[type].push(callback);
 
   return () => {
-    listeners[type] = listeners[type].filter(cb => cb !== callback);
+    listeners[type] = listeners[type].filter((cb) => cb !== callback);
   };
 };
 
-// Função para enviar mensagens (se necessário)
+// 🔹 Envia mensagem para o servidor (se necessário)
 export const sendWebSocketMessage = (message: any) => {
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(message));
   } else {
-    console.error('WebSocket não está conectado. Não foi possível enviar a mensagem.');
+    console.error("WebSocket não está conectado. Mensagem não enviada.");
   }
 };
