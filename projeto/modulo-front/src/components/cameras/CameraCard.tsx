@@ -10,32 +10,37 @@ interface CameraCardProps {
 
 function CameraCard({ camera, onSettingsClick }: CameraCardProps) {
   const isOnline = camera.status === 'online';
-  const isMjpegStream = camera.url.includes('cgi-bin') || camera.url.includes('mjpg');
 
-  // Criar uma função que decide qual player renderizar.
+  // Garantir que a URL não seja undefined
+  const url = camera.url || '';
+  const name = camera.name || 'Câmera';
+  const location = camera.location || 'Sem localização';
+
+  // Verifica se é stream MJPEG
+  const isMjpegStream = url.includes('cgi-bin') || url.includes('mjpg');
+
+  // Função que decide qual player renderizar
   const renderPlayer = () => {
-    // Se for um stream MJPEG, renderiza uma tag <img>.
     if (isMjpegStream) {
       return (
         <img
-          src={camera.url}
-          alt={`Stream da ${camera.name}`}
-          className="w-full h-full object-contain" // 'object-contain' evita distorção da imagem
-          onError={(e) => console.warn(`Erro ao carregar stream MJPEG da câmera ${camera.name}:`, e)}
+          src={url}
+          alt={`Stream da ${name}`}
+          className="w-full h-full object-contain"
+          onError={(e) => console.warn(`Erro ao carregar stream MJPEG da câmera ${name}:`, e)}
         />
       );
     }
 
     return (
       <ReactPlayer
-        // @ts-ignore
-        url={camera.url}
-        playing={true}
-        muted={true}
+        url={url}
+        playing
+        muted
         width="100%"
         height="100%"
         controls={false}
-        onError={(e) => console.warn(`Erro ao carregar stream de vídeo da câmera ${camera.name}:`, e)}
+        onError={(e) => console.warn(`Erro ao carregar stream de vídeo da câmera ${name}:`, e)}
       />
     );
   };
@@ -44,7 +49,6 @@ function CameraCard({ camera, onSettingsClick }: CameraCardProps) {
     <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden flex flex-col group">
       <div className="relative aspect-video bg-black flex items-center justify-center">
         {isOnline ? (
-          //  Chama a função renderPlayer() aqui.
           renderPlayer()
         ) : (
           <div className="text-gray-500 flex flex-col items-center">
@@ -57,14 +61,12 @@ function CameraCard({ camera, onSettingsClick }: CameraCardProps) {
       <div className="p-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-bold text-white truncate">{camera.name}</h3>
-            <p className="text-sm text-gray-400">{camera.location || 'Sem localização'}</p>
+            <h3 className="font-bold text-white truncate">{name}</h3>
+            <p className="text-sm text-gray-400">{location}</p>
           </div>
           <div className="flex items-center gap-x-3">
             <div
-              className={`flex items-center gap-x-1.5 px-2 py-1 rounded-full text-xs font-medium ${isOnline
-                ? 'bg-green-500/20 text-green-400'
-                : 'bg-red-500/20 text-red-400'
+              className={`flex items-center gap-x-1.5 px-2 py-1 rounded-full text-xs font-medium ${isOnline ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
                 }`}
             >
               <Signal size={12} />
