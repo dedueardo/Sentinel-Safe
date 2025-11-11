@@ -1,27 +1,27 @@
-import { Entity, PrimaryGeneratedColumn, Column } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from "typeorm";
+import { User } from "./user";
 
-@Entity("cameras")
+@Entity("camera")
 export class Camera {
     @PrimaryGeneratedColumn()
-    id_camera: number;
+    id_camera!: number;
 
     @Column()
-    ip_camera: string;
+    ip_camera!: string;
 
     @Column()
-    nome: string;
+    nome!: string;
 
     @Column()
-    modelo: string;
+    modelo!: string;
 
     @Column()
-    localizacao: string;
+    localizacao!: string;
 
     @Column()
-    data_instalacao: Date;
+    data_instalacao!: Date;
 
-    @Column()
-    status: string;
-
-
+    @ManyToOne(() => User)
+    @JoinColumn({ name: "id_user" })
+    user!: User;
 }

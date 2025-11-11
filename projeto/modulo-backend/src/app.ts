@@ -8,15 +8,8 @@ import authRoutes from "./routes/authRoutes";
 const app = express();
 app.use(express.json());
 
-// 🟢 Habilitar CORS
-app.use(
-    cors({
-        origin: "http://localhost:5173", // endereço do seu frontend (Vite)
-        credentials: true, // permite cookies e headers de autenticação
-    })
-);
+app.use(cors({ origin: "http://localhost:5173", credentials: true }));
 
-// 🛣️ Suas rotas
 app.use("/users", userRoutes);
 app.use("/cameras", cameraRoutes);
 app.use("/auth", authRoutes);

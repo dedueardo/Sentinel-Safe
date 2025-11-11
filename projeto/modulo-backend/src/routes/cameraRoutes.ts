@@ -1,4 +1,3 @@
-// src/routes/cameraRoutes.ts
 import { Router } from "express";
 import { CameraController } from "../controllers/cameraController";
 import { authMiddleware } from "../middlewares/authMiddleware";
@@ -6,7 +5,6 @@ import { authMiddleware } from "../middlewares/authMiddleware";
 const router = Router();
 const controller = new CameraController();
 
-// 🔒 todas as rotas exigem token
 router.use(authMiddleware);
 
 router.post("/", (req, res) => controller.create(req, res));

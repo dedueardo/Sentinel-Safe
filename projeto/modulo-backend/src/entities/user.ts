@@ -1,4 +1,3 @@
-// src/entities/user.ts
 import { Entity, PrimaryGeneratedColumn, Column } from "typeorm";
 
 @Entity("user")
@@ -14,6 +13,4 @@ export class User {
 
     @Column()
     password!: string;
-
-
 }

@@ -1,16 +1,12 @@
 import "dotenv/config";
-import http from "http";
+import { AppDataSource } from "./config/data-source";
 import app from "./app";
-import { initWebSocket } from "./websocket/websocketServer";
 
 const PORT = process.env.PORT || 3000;
 
-// Cria servidor HTTP
-const server = http.createServer(app);
-
-// Inicializa WebSocket passando o servidor HTTP
-initWebSocket(server);
-
-server.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
-});
+AppDataSource.initialize()
+  .then(() => {
+    console.log("✅ Banco conectado.");
+    app.listen(PORT, () => console.log(`🚀 Servidor rodando em http://localhost:${PORT}`));
+  })
+  .catch((err) => console.error("Erro ao inicializar o banco:", err));
