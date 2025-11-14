@@ -4,16 +4,15 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5173,         // Vite padrão (evita conflito com backend 3000)
+    port: 5173,        
     host: 'localhost',
-    // Remova o hmr.clientPort personalizado para evitar 'undefined'
     proxy: {
       '/api': {
-        target: 'http://localhost:3000', // não inclua /api aqui
+        target: 'http://localhost:3000', 
         changeOrigin: true,
       },
       '/ws-status': {
-        target: 'ws://localhost:3000',   // não inclua o path aqui
+        target: 'ws://localhost:3000', 
         ws: true,
         changeOrigin: true,
       },

@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { onWebSocketMessage } from '../services/websocket';
 import toast from 'react-hot-toast';
 import { arrayMove } from '@dnd-kit/sortable';
+import { useNotifications } from './NotificationContext';
 
 // Definindo o tipo de dados que o formulário envia para clareza
 type CameraFormData = Omit<Camera, 'id' | 'status' | 'lastUpdated' | 'streamUrl' | 'display_order'>;
@@ -26,6 +27,7 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { isAuthenticated } = useAuth();
+  const { addNotification } = useNotifications();
 
   const fetchCameras = useCallback(async () => {
     setLoading(true);
@@ -62,6 +64,13 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
     await toast.promise(
       camerasService.create(data).then(newCamera => {
         setCameras((prev) => [...prev, newCamera]);
+        // Notificação de criação
+        addNotification({
+          type: 'camera_added',
+          message: `Câmera "${newCamera.name}" adicionada`,
+          cameraId: newCamera.id.toString(),
+          cameraName: newCamera.name,
+        });
       }),
       {
         loading: 'Adicionando câmera...',
@@ -69,7 +78,7 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
         error: (err) => <b>{err.response?.data?.message || 'Falha ao adicionar a câmera.'}</b>,
       }
     );
-  }, []);
+  }, [addNotification]);
 
   // 👇 E AQUI 👇
   const updateCamera = useCallback(async (id: string, data: Partial<CameraFormData>) => {
@@ -79,6 +88,14 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
         setCameras((prev) =>
           prev.map((cam) => (cam.id.toString() === id ? { ...cam, ...data, lastUpdated: new Date().toISOString() } : cam))
         );
+        // Notificação de atualização
+        const name = data.name || cameras.find(c => c.id.toString() === id)?.name || 'Câmera';
+        addNotification({
+          type: 'camera_updated',
+          message: `Câmera "${name}" atualizada`,
+          cameraId: id,
+          cameraName: name,
+        });
       }),
       {
         loading: 'Salvando alterações...',
@@ -86,13 +103,21 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
         error: (err) => <b>{err.response?.data?.message || 'Falha ao atualizar a câmera.'}</b>,
       }
     );
-  }, []);
+  }, [addNotification, cameras]);
 
   const deleteCamera = useCallback(async (id: string) => {
     const { camerasService } = await import('../services/cameras');
+    const name = cameras.find(c => c.id.toString() === id)?.name || 'Câmera';
     await toast.promise(
       camerasService.delete(id).then(() => {
         setCameras((prev) => prev.filter((cam) => cam.id.toString() !== id));
+        // Notificação de remoção
+        addNotification({
+          type: 'camera_deleted',
+          message: `Câmera "${name}" removida`,
+          cameraId: id,
+          cameraName: name,
+        });
       }),
       {
         loading: 'Removendo câmera...',
@@ -100,7 +125,7 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
         error: (err) => <b>{err.response?.data?.message || 'Falha ao remover a câmera.'}</b>,
       }
     );
-  }, []);
+  }, [addNotification, cameras]);
 
   const reorderCameras = useCallback(async (oldIndex: number, newIndex: number) => {
     const reorderedCameras = arrayMove(cameras, oldIndex, newIndex);

@@ -2,7 +2,15 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { connectWebSocket, onWebSocketMessage } from '../services/websocket';
 
 // Tipos de notificação
-export type NotificationType = 'motion' | 'person' | 'alert' | 'info' | 'error';
+export type NotificationType =
+  | 'motion'
+  | 'person'
+  | 'alert'
+  | 'info'
+  | 'error'
+  | 'camera_added'
+  | 'camera_updated'
+  | 'camera_deleted';
 
 export interface Notification {
   id: string;

@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../config/db');
 const authMiddleware = require('../middleware/authMiddleware');
 const { ensureStreamForCamera } = require('../services/streamManager');
+const { encrypt, decrypt } = require('../utils/crypto');
 
 // Todas as rotas abaixo exigem autenticação
 router.use(authMiddleware);
@@ -20,16 +21,19 @@ router.get('/', (req, res) => {
             return res.status(500).send('Erro no servidor.');
         }
 
-        const camerasComStreamUrl = results.map(camera => {
-            if (camera.streamType === 'mjpeg') {
-                return { ...camera, streamUrl: `/api/streams/mjpeg/${camera.id}` };
+        const camerasComStreamUrl = results.map(row => {
+            let plainUrl = '';
+            try { plainUrl = decrypt(row.url); } catch { plainUrl = row.url; }
+
+            let streamUrl = '';
+            if (row.streamType === 'mjpeg') {
+                streamUrl = `/api/streams/mjpeg/${row.id}`;
+            } else if (row.streamType === 'rtsp') {
+                streamUrl = ensureStreamForCamera({ ...row, url: plainUrl }, req);
             }
-            if (camera.streamType === 'rtsp') {
-                const wsUrl = ensureStreamForCamera(camera, req);
-                return { ...camera, streamUrl: wsUrl };
-            }
-            // outros tipos ainda não suportados
-            return { ...camera, streamUrl: '' };
+
+            const { url, username, password, ...safe } = row;
+            return { ...safe, streamUrl };
         });
 
         res.json(camerasComStreamUrl);
@@ -59,22 +63,28 @@ router.post('/', (req, res) => {
 
         // Adicione streamType ao INSERT
         const insertQuery = 'INSERT INTO cameras (user_id, name, url, streamType, username, password, location, description, display_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
-        db.query(insertQuery, [userId, name, url, streamType, username, password, location, description, newOrder], (err, result) => {
+        const encUrl = encrypt(url);
+        db.query(insertQuery, [userId, name, encUrl, streamType, username, password, location, description, newOrder], (err, result) => {
             if (err) {
                 console.error("Erro ao criar câmera:", err);
                 return res.status(500).send('Erro ao criar a câmera.');
             }
+            let streamUrl = '';
+            if (streamType === 'mjpeg') streamUrl = `/api/streams/mjpeg/${result.insertId}`;
+            if (streamType === 'rtsp') {
+                let plainUrl = '';
+                try { plainUrl = decrypt(encUrl); } catch { plainUrl = url; }
+                streamUrl = ensureStreamForCamera({ id: result.insertId, name, url: plainUrl }, req);
+            }
             res.status(201).json({
                 id: result.insertId,
                 name,
-                url,
                 streamType,
-                username,
-                password,
                 location,
                 description,
                 status: 'offline',
-                display_order: newOrder
+                display_order: newOrder,
+                streamUrl
             });
         });
     });
@@ -87,9 +97,9 @@ router.put('/:id', (req, res) => {
     const userId = req.user.id;
     const cameraId = req.params.id;
     const { name, url, streamType, username, password, location, description } = req.body;
-
+    const encUrl = url ? encrypt(url) : undefined;
     const query = 'UPDATE cameras SET name = ?, url = ?, streamType = ?, username = ?, password = ?, location = ?, description = ? WHERE id = ? AND user_id = ?';
-    db.query(query, [name, url, streamType, username, password, location, description, cameraId, userId], (err, result) => {
+    db.query(query, [name, encUrl, streamType, username, password, location, description, cameraId, userId], (err, result) => {
         if (err) {
             console.error("Erro ao atualizar câmera:", err);
             return res.status(500).send('Erro ao atualizar a câmera.');

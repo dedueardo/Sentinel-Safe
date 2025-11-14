@@ -6,6 +6,7 @@ const https = require('https');
 const { URL } = require('url');
 const { pipeline } = require('stream');
 const jwt = require('jsonwebtoken');
+const { decrypt } = require('../utils/crypto');
 
 // REMOVER router.use(authMiddleware); para permitir query ?auth=
 
@@ -37,7 +38,9 @@ router.get('/mjpeg/:id', (req, res) => {
         if (!rows?.length) return res.status(404).send('Câmera não encontrada.');
 
         const camera = rows[0];
-        const upstreamUrl = new URL(camera.url);
+        let upstreamStr = camera.url;
+        try { upstreamStr = decrypt(upstreamStr); } catch { }
+        const upstreamUrl = new URL(upstreamStr);
         const isHttps = upstreamUrl.protocol === 'https:';
 
         const options = {
