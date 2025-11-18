@@ -2,7 +2,7 @@
 
 Sistema completo de monitoramento e gerenciamento de câmeras de segurança em tempo real, com interface moderna e recursos avançados de streaming.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
 ![License](https://img.shields.io/badge/license-ISC-green.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)
 ![React](https://img.shields.io/badge/react-18.3.1-blue.svg)
@@ -31,6 +31,8 @@ Sentinel Safe é uma plataforma completa de monitoramento de câmeras de seguran
 - Receber notificações sobre mudanças de status das câmeras
 - Organizar câmeras através de drag-and-drop
 - Acessar diferentes tipos de protocolos de streaming (RTSP, MJPEG, HLS, DASH)
+- Sistema de notificações em tempo real com histórico completo
+- Interface moderna com tema claro/escuro
 
 ## ✨ Funcionalidades
 
@@ -39,24 +41,44 @@ Sentinel Safe é uma plataforma completa de monitoramento de câmeras de seguran
 - 🔄 **Drag & Drop** - Reorganize câmeras com interface intuitiva
 - 🎨 **Interface Responsiva** - Design adaptável para desktop e mobile
 - 🌓 **Modo Escuro/Claro** - Tema personalizável para melhor experiência visual
+- 📝 **Validação Avançada** - Validação de URLs RTSP/HTTP em tempo real
+- 🏷️ **Categorização** - Organize câmeras por localização e tipo
 
 ### Streaming de Vídeo
 - 📹 **Múltiplos Protocolos** - Suporte para RTSP, MJPEG, HTTP, HLS e DASH
 - ⚡ **Streaming em Tempo Real** - Visualização instantânea das câmeras
 - 🔌 **WebSocket** - Atualizações de status em tempo real
 - 🎬 **Player Integrado** - Reprodução otimizada de diferentes formatos
+- 🖼️ **Múltiplas Visualizações** - Grade, lista e visualização individual
+- 🔄 **Auto-reconexão** - Reconexão automática em caso de perda de conexão
 
 ### Segurança
 - 🔐 **Autenticação JWT** - Sistema seguro de login e registro
-- 🔒 **Criptografia de URLs** - Proteção das credenciais das câmeras
+- 🔒 **Criptografia AES-256** - Proteção das credenciais das câmeras
 - 👤 **Controle de Acesso** - Cada usuário visualiza apenas suas câmeras
 - 🛡️ **Middleware de Proteção** - Rotas protegidas com autenticação
+- 🚫 **Rate Limiting** - Proteção contra brute force
+- 🔍 **Sanitização XSS** - Proteção contra ataques XSS
+- 🎯 **CSP Headers** - Content Security Policy configurada
+- 🔑 **Helmet.js** - Headers de segurança hardened
 
 ### Monitoramento
 - 📊 **Dashboard Centralizado** - Visão geral de todas as câmeras
 - 🔔 **Notificações em Tempo Real** - Alertas sobre mudanças de status
 - 📈 **Status das Câmeras** - Monitoramento online/offline automático
 - ⏰ **Atualização Automática** - Verificação periódica do status
+- 📜 **Histórico de Eventos** - Registro completo de todas as ações
+- 🔍 **Filtros Avançados** - Filtre notificações por tipo e data
+- 💾 **Persistência Local** - Notificações salvas no localStorage
+
+### Sistema de Notificações
+- 🎨 **4 Tipos de Notificações** - Success, Info, Warning, Error
+- 🔔 **Badge de Contador** - Número de notificações não lidas
+- 📱 **Painel Deslizante** - Interface moderna e intuitiva
+- ⏱️ **Timestamps** - Data e hora de cada notificação
+- 🗑️ **Gerenciamento** - Marcar como lida, apagar individual ou limpar tudo
+- 🔊 **Notificações Toast** - Alertas visuais temporários
+- 📊 **Estatísticas** - Total de notificações e não lidas
 
 ## 🚀 Tecnologias Utilizadas
 
@@ -68,8 +90,10 @@ Sentinel Safe é uma plataforma completa de monitoramento de câmeras de seguran
 - **JSON Web Token (JWT)** - Autenticação stateless
 - **bcryptjs** - Hash de senhas
 - **dotenv** - Gerenciamento de variáveis de ambiente
-- **Node Media Server** - Streaming RTSP
-- **node-rtsp-stream** - Conversão RTSP para WebSocket
+- **helmet** - Segurança de headers HTTP
+- **xss** - Sanitização contra XSS
+- **express-rate-limit** - Rate limiting
+- **crypto** - Criptografia AES-256-CBC
 
 ### Frontend
 - **React 18** - Biblioteca JavaScript para UI
@@ -82,6 +106,7 @@ Sentinel Safe é uma plataforma completa de monitoramento de câmeras de seguran
 - **@dnd-kit** - Drag and drop
 - **React Hot Toast** - Notificações toast
 - **Lucide React** - Ícones modernos
+- **date-fns** - Manipulação de datas
 
 ## 🏗️ Arquitetura do Sistema
 
@@ -89,13 +114,18 @@ Sentinel Safe é uma plataforma completa de monitoramento de câmeras de seguran
 ┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
 │                 │         │                 │         │                 │
 │   Frontend      │◄────────┤   Backend API   │◄────────┤   MySQL DB      │
-│   (React)       │         │   (Express)     │         │                 │
+│   (React)       │  HTTP   │   (Express)     │         │                 │
 │                 │         │                 │         │                 │
 └────────┬────────┘         └────────┬────────┘         └─────────────────┘
          │                           │
-         │                           │
          │    WebSocket Connection   │
          │◄──────────────────────────┤
+         │    (Real-time Updates)    │
+         │                           ▼
+         │                  ┌─────────────────┐
+         │                  │  Notification   │
+         │                  │    Service      │
+         │                  └────────┬────────┘
          │                           │
          │                           ▼
          │                  ┌─────────────────┐
@@ -198,12 +228,20 @@ DB_DATABASE=sentinel_safe
 JWT_SECRET=sua_chave_secreta_muito_segura_aqui
 JWT_EXPIRES_IN=7d
 
-# Criptografia
+# Criptografia (32 caracteres para a chave, 16 para o IV)
 CRYPTO_SECRET_KEY=sua_chave_de_criptografia_32_caracteres
 CRYPTO_IV=seu_iv_de_16_caracteres
 
 # RTSP Stream
 RTSP_PORT_START=9999
+
+# Rate Limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+
+# Login Protection
+LOGIN_MAX_ATTEMPTS=5
+LOGIN_LOCKOUT_DURATION=900000
 ```
 
 ### Frontend (ambiente de desenvolvimento)
@@ -213,7 +251,14 @@ O frontend está configurado para se conectar ao backend em `http://localhost:30
 Para modificar, edite `frontend/src/services/api.ts`:
 
 ```typescript
-const API_URL = 'http://localhost:3000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+```
+
+Crie um arquivo `.env` na pasta `frontend/` (opcional):
+
+```env
+VITE_API_URL=http://localhost:3000/api
+VITE_WS_URL=ws://localhost:3000
 ```
 
 ## 🎮 Como Usar
@@ -264,6 +309,16 @@ A aplicação estará disponível em `http://localhost:5173`
 3. Use drag & drop para reorganizar as câmeras
 4. O status (online/offline) é atualizado automaticamente
 
+### Gerenciando Notificações
+
+1. Clique no ícone de sino 🔔 no canto superior direito
+2. Visualize todas as notificações no painel deslizante
+3. Clique em uma notificação para marcá-la como lida
+4. Use os botões para:
+   - **Marcar todas como lidas** - Limpa o contador
+   - **Limpar todas** - Remove todas as notificações
+   - **Apagar individual** - Remove uma notificação específica
+
 ## 📁 Estrutura do Projeto
 
 ```
@@ -272,7 +327,8 @@ sentinel-safe/
 │   ├── config/
 │   │   └── db.js                    # Configuração do MySQL
 │   ├── middleware/
-│   │   └── authMiddleware.js        # Middleware de autenticação JWT
+│   │   ├── authMiddleware.js        # Middleware de autenticação JWT
+│   │   └── rateLimiter.js           # Rate limiting configurado
 │   ├── routes/
 │   │   ├── auth.js                  # Rotas de autenticação
 │   │   ├── cameras.js               # Rotas de câmeras
@@ -280,12 +336,14 @@ sentinel-safe/
 │   │   └── users.js                 # Rotas de usuários
 │   ├── services/
 │   │   ├── monitoringService.js     # Serviço de monitoramento
-│   │   └── streamManager.js         # Gerenciador de streams
+│   │   ├── streamManager.js         # Gerenciador de streams
+│   │   └── notificationService.js   # Serviço de notificações
 │   ├── utils/
-│   │   └── crypto.js                # Utilitários de criptografia
+│   │   ├── crypto.js                # Utilitários de criptografia
+│   │   └── validators.js            # Validadores de entrada
 │   ├── scripts/
 │   │   └── encryptExistingCameraUrls.js
-│   ├── app.js
+│   ├── app.js                       # Configuração do Express
 │   ├── index.js                     # Entry point do servidor
 │   └── package.json
 │
@@ -310,25 +368,29 @@ sentinel-safe/
     │   │   │   ├── Navbar.tsx
     │   │   │   └── Sidebar.tsx
     │   │   └── notifications/
-    │   │       └── NotificationPanel.tsx
+    │   │       ├── NotificationPanel.tsx    # Painel de notificações
+    │   │       └── NotificationBadge.tsx    # Badge com contador
     │   ├── contexts/
-    │   │   ├── AuthContext.tsx       # Contexto de autenticação
-    │   │   ├── CameraContext.tsx     # Contexto de câmeras
-    │   │   ├── NotificationContext.tsx
-    │   │   └── ThemeContext.tsx      # Contexto de tema
+    │   │   ├── AuthContext.tsx              # Contexto de autenticação
+    │   │   ├── CameraContext.tsx            # Contexto de câmeras
+    │   │   ├── NotificationContext.tsx      # Contexto de notificações
+    │   │   └── ThemeContext.tsx             # Contexto de tema
     │   ├── pages/
-    │   │   ├── CameraManagement.tsx  # Página de gerenciamento
+    │   │   ├── CameraManagement.tsx         # Página de gerenciamento
     │   │   ├── Cameras.tsx
-    │   │   ├── Dashboard.tsx         # Dashboard principal
+    │   │   ├── Dashboard.tsx                # Dashboard principal
     │   │   ├── Login.tsx
     │   │   ├── Register.tsx
     │   │   └── Settings.tsx
     │   ├── services/
-    │   │   ├── api.ts               # Cliente Axios
-    │   │   ├── cameras.ts           # API de câmeras
-    │   │   └── websocket.ts         # Cliente WebSocket
+    │   │   ├── api.ts                       # Cliente Axios
+    │   │   ├── cameras.ts                   # API de câmeras
+    │   │   └── websocket.ts                 # Cliente WebSocket
     │   ├── types/
-    │   │   └── camera.ts            # TypeScript types
+    │   │   ├── camera.ts                    # TypeScript types
+    │   │   └── notification.ts              # Types de notificações
+    │   ├── utils/
+    │   │   └── storage.ts                   # LocalStorage helpers
     │   ├── App.tsx
     │   └── main.tsx
     ├── index.html
@@ -345,6 +407,7 @@ sentinel-safe/
 POST   /api/auth/register    # Registrar novo usuário
 POST   /api/auth/login       # Login de usuário
 GET    /api/auth/me          # Obter dados do usuário autenticado
+POST   /api/auth/logout      # Logout de usuário
 ```
 
 ### Câmeras
@@ -356,6 +419,7 @@ GET    /api/cameras/:id      # Obter câmera específica
 PUT    /api/cameras/:id      # Atualizar câmera
 DELETE /api/cameras/:id      # Excluir câmera
 PATCH  /api/cameras/reorder  # Reordenar câmeras
+GET    /api/cameras/:id/status  # Verificar status da câmera
 ```
 
 ### Streams
@@ -363,6 +427,18 @@ PATCH  /api/cameras/reorder  # Reordenar câmeras
 ```
 GET    /api/streams/mjpeg/:id    # Stream MJPEG
 GET    /api/streams/ws/:id       # WebSocket stream
+GET    /api/streams/hls/:id      # Stream HLS
+```
+
+### WebSocket Events
+
+```
+connection                    # Conexão estabelecida
+camera:status:update         # Atualização de status de câmera
+camera:added                 # Nova câmera adicionada
+camera:updated               # Câmera atualizada
+camera:deleted               # Câmera removida
+notification:new             # Nova notificação
 ```
 
 ### Exemplo de Request
@@ -382,23 +458,117 @@ curl -X POST http://localhost:3000/api/cameras \
   }'
 ```
 
+**Login:**
+
+```bash
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "usuario@example.com",
+    "password": "senha123"
+  }'
+```
+
 ## 🔐 Segurança
 
 ### Autenticação
-- Todas as rotas de câmeras requerem autenticação JWT
-- Tokens expiram em 7 dias (configurável)
-- Senhas são hashadas com bcrypt (10 rounds)
+- ✅ Todas as rotas de câmeras requerem autenticação JWT
+- ✅ Tokens expiram em 7 dias (configurável)
+- ✅ Senhas são hashadas com bcrypt (10 rounds)
+- ✅ Refresh token automático
+- ✅ Logout seguro com invalidação de token
 
 ### Criptografia
-- URLs das câmeras são criptografadas no banco de dados
-- Algoritmo AES-256-CBC
-- Credenciais sensíveis nunca são expostas no frontend
+- ✅ URLs das câmeras criptografadas com AES-256-CBC
+- ✅ Credenciais sensíveis nunca expostas no frontend
+- ✅ Chaves de criptografia em variáveis de ambiente
+- ✅ IV único para cada criptografia
 
 ### Proteção de Dados
-- Cada usuário acessa apenas suas próprias câmeras
-- Validação de propriedade em todas as operações
-- CORS configurado para origens específicas
-- SQL Injection protection via prepared statements
+- ✅ Cada usuário acessa apenas suas próprias câmeras
+- ✅ Validação de propriedade em todas as operações
+- ✅ CORS configurado para origens específicas
+- ✅ SQL Injection protection via prepared statements
+- ✅ Input validation com sanitização
+
+### Proteções Implementadas
+
+#### Rate Limiting
+- ✅ Limite global: 100 requisições por 15 minutos
+- ✅ Login: 5 tentativas por 15 minutos
+- ✅ Atraso progressivo em tentativas falhadas
+- ✅ Bloqueio temporário após múltiplas falhas
+
+#### Headers de Segurança (Helmet)
+- ✅ Content Security Policy (CSP) configurada
+- ✅ X-Frame-Options: DENY
+- ✅ X-Content-Type-Options: nosniff
+- ✅ Strict-Transport-Security
+- ✅ X-XSS-Protection
+
+#### Proteção XSS
+- ✅ Sanitização de inputs com biblioteca `xss`
+- ✅ Validação de campos em câmeras
+- ✅ Escape de caracteres especiais
+- ✅ Content-Type enforcement
+
+#### Proteção SQL Injection
+- ✅ Prepared statements em todas as queries
+- ✅ Validação de tipos de dados
+- ✅ Sanitização de parâmetros
+- ✅ ORM-like patterns
+
+#### Token Hardening
+- ✅ Verificação de prefixo Bearer
+- ✅ Algoritmo explícito HS256
+- ✅ Validação de estrutura do token
+- ✅ Verificação de expiração
+
+## 🚀 Performance
+
+### Otimizações Implementadas
+- ⚡ Lazy loading de componentes
+- ⚡ Memoização com React.memo
+- ⚡ Debounce em buscas e filtros
+- ⚡ Virtual scrolling para listas grandes
+- ⚡ Compressão de assets
+- ⚡ Code splitting automático
+
+### Monitoramento
+- 📊 WebSocket para atualizações em tempo real
+- 📊 Reconexão automática em falhas
+- 📊 Heartbeat para manter conexões ativas
+- 📊 Logs estruturados no backend
+
+## 🧪 Testes
+
+### Backend
+```bash
+cd backend
+npm test
+```
+
+### Frontend
+```bash
+cd frontend
+npm test
+```
+
+## 📦 Build para Produção
+
+### Backend
+```bash
+cd backend
+npm run build
+npm start
+```
+
+### Frontend
+```bash
+cd frontend
+npm run build
+npm run preview
+```
 
 ## 🤝 Contribuindo
 
@@ -409,6 +579,12 @@ Contribuições são sempre bem-vindas!
 3. Commit suas mudanças (`git commit -m 'Add: nova feature'`)
 4. Push para a branch (`git push origin feature/MinhaFeature`)
 5. Abra um Pull Request
+
+### Guidelines
+- Siga o padrão de código existente
+- Adicione testes para novas funcionalidades
+- Atualize a documentação
+- Faça commits semânticos
 
 ## 📝 Licença
 
@@ -431,6 +607,12 @@ Este projeto está sob a licença ISC. Veja o arquivo `LICENSE` para mais detalh
 
  Higor Manoel Gomes de Lima
 
+## 📞 Contato
+
+- GitHub: [@dedueardo](https://github.com/dedueardo)
+- LinkedIn: [Seu LinkedIn]
+- Email: seu-email@exemplo.com
+
 ## 🙏 Agradecimentos
 
 - [Node.js](https://nodejs.org/)
@@ -438,5 +620,10 @@ Este projeto está sob a licença ISC. Veja o arquivo `LICENSE` para mais detalh
 - [Tailwind CSS](https://tailwindcss.com/)
 - [Vite](https://vitejs.dev/)
 - [Express](https://expressjs.com/)
+- [Framer Motion](https://www.framer.com/motion/)
+- [Lucide Icons](https://lucide.dev/)
 
----
+
+⭐ Se este projeto te ajudou, considere dar uma estrela!
+
+💬 Sugestões e feedback são sempre bem-vindos!

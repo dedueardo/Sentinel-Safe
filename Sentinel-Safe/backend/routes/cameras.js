@@ -1,24 +1,35 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
-const authMiddleware = require('../middleware/authMiddleware');
-const { ensureStreamForCamera } = require('../services/streamManager');
+const authMiddleware = require('../middleware/authMiddleware'); // 👈 Corrigido
 const { encrypt, decrypt } = require('../utils/crypto');
+const { sanitizeCameraInput, validateURL } = require('../utils/sanitize');
+const { ensureStreamForCamera, stopStream, getActiveStreams } = require('../services/streamManager');
 
-// Todas as rotas abaixo exigem autenticação
 router.use(authMiddleware);
+
+// 👇 NOVO: Endpoint de debug
+router.get('/debug/streams', (req, res) => {
+    const activeStreams = getActiveStreams();
+    res.json({
+        total: activeStreams.length,
+        basePort: process.env.STREAM_BASE_PORT || 3100,
+        streams: activeStreams
+    });
+});
 
 router.get('/', (req, res) => {
     if (!req.user || !req.user.id) {
-        return res.status(401).send('Acesso não autorizado. Token inválido.');
+        return res.status(401).json({ msg: 'Acesso não autorizado. Token inválido.' });
     }
+
     const userId = req.user.id;
     const query = 'SELECT * FROM cameras WHERE user_id = ? ORDER BY COALESCE(display_order, 99999) ASC';
 
     db.query(query, [userId], (err, results) => {
         if (err) {
             console.error("Erro de banco de dados ao buscar câmeras:", err);
-            return res.status(500).send('Erro no servidor.');
+            return res.status(500).json({ error: 'Erro no servidor.' });
         }
 
         const camerasComStreamUrl = results.map(row => {
@@ -41,141 +52,136 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-    if (!req.user || !req.user.id) {
-        return res.status(401).send('Acesso não autorizado.');
-    }
     const userId = req.user.id;
-    const { name, url, streamType, username, password, location, description } = req.body;
+    const data = sanitizeCameraInput(req.body);
 
-    // Validar tipo de stream
-    const validTypes = ['rtsp', 'mjpeg', 'http', 'hls', 'dash'];
-    if (!validTypes.includes(streamType)) {
+    // Validações
+    if (!data.name || !data.url) {
+        return res.status(400).json({ error: 'Nome e URL são obrigatórios.' });
+    }
+
+    if (!validateURL(data.url)) {
+        return res.status(400).json({ error: 'URL inválida.' });
+    }
+
+    const validStreamTypes = ['rtsp', 'mjpeg', 'http', 'hls', 'dash'];
+    if (!validStreamTypes.includes(data.streamType)) {
         return res.status(400).json({ error: 'Tipo de stream inválido.' });
     }
 
-    const orderQuery = 'SELECT COUNT(*) as cameraCount FROM cameras WHERE user_id = ?';
-    db.query(orderQuery, [userId], (err, countResult) => {
-        if (err) {
-            console.error("Erro ao contar câmeras:", err);
-            return res.status(500).send('Erro ao criar a câmera.');
-        }
-        const newOrder = countResult[0].cameraCount;
+    const query = 'INSERT INTO cameras (user_id, name, url, streamType, username, password, location, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
 
-        // Adicione streamType ao INSERT
-        const insertQuery = 'INSERT INTO cameras (user_id, name, url, streamType, username, password, location, description, display_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
-        const encUrl = encrypt(url);
-        db.query(insertQuery, [userId, name, encUrl, streamType, username, password, location, description, newOrder], (err, result) => {
-            if (err) {
-                console.error("Erro ao criar câmera:", err);
-                return res.status(500).send('Erro ao criar a câmera.');
-            }
-            let streamUrl = '';
-            if (streamType === 'mjpeg') streamUrl = `/api/streams/mjpeg/${result.insertId}`;
-            if (streamType === 'rtsp') {
-                let plainUrl = '';
-                try { plainUrl = decrypt(encUrl); } catch { plainUrl = url; }
-                streamUrl = ensureStreamForCamera({ id: result.insertId, name, url: plainUrl }, req);
-            }
-            res.status(201).json({
-                id: result.insertId,
-                name,
-                streamType,
-                location,
-                description,
-                status: 'offline',
-                display_order: newOrder,
-                streamUrl
-            });
-        });
+    db.query(query, [
+        userId,
+        data.name,
+        encrypt(data.url),
+        data.streamType,
+        data.username,
+        data.password,
+        data.location,
+        data.description
+    ], (err, result) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Erro ao criar câmera.' });
+        }
+        res.status(201).json({ id: result.insertId, msg: 'Câmera criada com sucesso.' });
     });
 });
 
 router.put('/:id', (req, res) => {
-    if (!req.user || !req.user.id) {
-        return res.status(401).send('Acesso não autorizado.');
-    }
     const userId = req.user.id;
-    const cameraId = req.params.id;
-    const { name, url, streamType, username, password, location, description } = req.body;
-    const encUrl = url ? encrypt(url) : undefined;
-    const query = 'UPDATE cameras SET name = ?, url = ?, streamType = ?, username = ?, password = ?, location = ?, description = ? WHERE id = ? AND user_id = ?';
-    db.query(query, [name, encUrl, streamType, username, password, location, description, cameraId, userId], (err, result) => {
-        if (err) {
-            console.error("Erro ao atualizar câmera:", err);
-            return res.status(500).send('Erro ao atualizar a câmera.');
+    const camId = req.params.id;
+    const data = sanitizeCameraInput(req.body);
+
+    // Validações
+    if (!validateURL(data.url)) {
+        return res.status(400).json({ error: 'URL inválida.' });
+    }
+
+    const sel = 'SELECT id FROM cameras WHERE id = ? AND user_id = ?';
+
+    db.query(sel, [camId, userId], (e, rows) => {
+        if (e) {
+            console.error(e);
+            return res.status(500).json({ error: 'Erro no servidor.' });
         }
-        if (result.affectedRows === 0) {
-            return res.status(404).send('Câmera não encontrada ou você não tem permissão.');
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Câmera não encontrada.' });
         }
-        res.send('Câmera atualizada com sucesso.');
+
+        const upd = 'UPDATE cameras SET name = ?, url = ?, streamType = ?, username = ?, password = ?, location = ?, description = ? WHERE id = ?';
+
+        db.query(upd, [
+            data.name,
+            encrypt(data.url),
+            data.streamType,
+            data.username,
+            data.password,
+            data.location,
+            data.description,
+            camId
+        ], err => {
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ error: 'Erro ao atualizar câmera.' });
+            }
+            res.json({ msg: 'Câmera atualizada com sucesso.' });
+        });
     });
 });
 
 router.delete('/:id', (req, res) => {
-    if (!req.user || !req.user.id) {
-        return res.status(401).send('Acesso não autorizado.');
-    }
     const userId = req.user.id;
-    const cameraId = req.params.id;
-    const query = 'DELETE FROM cameras WHERE id = ? AND user_id = ?';
-    db.query(query, [cameraId, userId], (err, result) => {
-        if (err) {
-            console.error("Erro de banco de dados ao deletar câmera:", err);
-            return res.status(500).send('Erro ao deletar a câmera.');
+    const camId = req.params.id;
+    const sel = 'SELECT id FROM cameras WHERE id = ? AND user_id = ?';
+
+    db.query(sel, [camId, userId], (e, rows) => {
+        if (e) {
+            console.error(e);
+            return res.status(500).json({ error: 'Erro no servidor.' });
         }
-        if (result.affectedRows === 0) {
-            return res.status(404).send('Câmera não encontrada ou você não tem permissão.');
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Câmera não encontrada.' });
         }
-        res.status(204).send();
+
+        const del = 'DELETE FROM cameras WHERE id = ?';
+        db.query(del, [camId], err => {
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ error: 'Erro ao excluir câmera.' });
+            }
+            res.json({ msg: 'Câmera excluída com sucesso.' });
+        });
     });
 });
 
 router.patch('/reorder', (req, res) => {
-    if (!req.user || !req.user.id) {
-        return res.status(401).send('Acesso não autorizado.');
-    }
     const userId = req.user.id;
-    const { order } = req.body; // Espera um array: [{ id: '1', order: 0 }, { id: '2', order: 1 }]
+    const { order } = req.body;
 
     if (!Array.isArray(order)) {
-        return res.status(400).json({ message: 'O corpo da requisição deve ser um array.' });
+        return res.status(400).json({ error: 'Ordem inválida.' });
     }
 
-    db.beginTransaction(err => {
-        if (err) {
-            console.error("Erro ao iniciar transação:", err);
-            return res.status(500).send('Erro no servidor.');
-        }
-
-        const promises = order.map(item => {
-            const query = 'UPDATE cameras SET display_order = ? WHERE id = ? AND user_id = ?';
-            return new Promise((resolve, reject) => {
-                db.query(query, [item.order, item.id, userId], (err, result) => {
-                    if (err) return reject(err);
-                    resolve(result);
-                });
-            });
+    const promises = order.map(({ id, order: newOrder }) => {
+        return new Promise((resolve, reject) => {
+            db.query(
+                'UPDATE cameras SET display_order = ? WHERE id = ? AND user_id = ?',
+                [newOrder, id, userId],
+                (err) => (err ? reject(err) : resolve())
+            );
         });
-
-        Promise.all(promises)
-            .then(() => {
-                db.commit(err => {
-                    if (err) {
-                        return db.rollback(() => {
-                            console.error("Erro ao commitar transação:", err);
-                            res.status(500).send('Erro no servidor.');
-                        });
-                    }
-                    res.status(200).json({ message: 'Ordem das câmeras atualizada com sucesso.' });
-                });
-            })
-            .catch(error => {
-                db.rollback(() => {
-                    console.error('Erro ao reordenar câmeras:', error);
-                    res.status(500).send('Erro no servidor ao atualizar a ordem.');
-                });
-            });
     });
+
+    Promise.all(promises)
+        .then(() => res.json({ msg: 'Ordem atualizada.' }))
+        .catch((err) => {
+            console.error(err);
+            res.status(500).json({ error: 'Erro ao atualizar ordem.' });
+        });
 });
 
 module.exports = router;

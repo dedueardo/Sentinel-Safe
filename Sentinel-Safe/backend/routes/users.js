@@ -5,13 +5,19 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
 const authMiddleware = require('../middleware/authMiddleware');
+const { sanitizeString, validateEmail } = require('../utils/sanitize');
 
 // ========================================================
 // NOVA ROTA: Registrar um novo usuário (Cadastro)
 // Rota: POST /api/users/
 // ========================================================
 router.post('/', async (req, res) => {
-    const { name, email, password } = req.body;
+    let { name, email, password } = req.body;
+    name = sanitizeString(name);
+    email = sanitizeString(email);
+    if (!validateEmail(email)) {
+        return res.status(400).json({ error: 'Email inválido.' });
+    }
 
     // Validação simples
     if (!name || !email || !password) {
@@ -52,7 +58,6 @@ router.post('/', async (req, res) => {
         res.status(500).json({ error: 'Ocorreu um erro inesperado.' });
     }
 });
-
 
 // ========================================================
 // ROTA EXISTENTE: Obter dados do perfil do usuário logado
