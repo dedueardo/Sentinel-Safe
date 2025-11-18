@@ -607,12 +607,6 @@ Este projeto está sob a licença ISC. Veja o arquivo `LICENSE` para mais detalh
 
  Higor Manoel Gomes de Lima
 
-## 📞 Contato
-
-- GitHub: [@dedueardo](https://github.com/dedueardo)
-- LinkedIn: [Seu LinkedIn]
-- Email: seu-email@exemplo.com
-
 ## 🙏 Agradecimentos
 
 - [Node.js](https://nodejs.org/)
