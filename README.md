@@ -422,6 +422,15 @@ Este projeto está sob a licença ISC. Veja o arquivo `LICENSE` para mais detalh
 - GitHub: [@dedueardo](https://github.com/dedueardo)
 - Email: dedue147@gmail.com
 
+  Danie José dos Santos Júnior
+- GitHub:  [@Redarsene2](https://github.com/Redarsene2)
+
+  Bruno João da Silva
+
+  Bruno Rafael Bezerra Filho
+
+  Higor Manoel Gomes de Lima
+
 ## 🙏 Agradecimentos
 
 - [Node.js](https://nodejs.org/)
