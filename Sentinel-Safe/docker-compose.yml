@@ -27,8 +27,7 @@ services:
     image: mysql:8.0
     container_name: sentinel_safe_db_migrate
     depends_on:
-      db:
-        condition: service_healthy
+      - db
     restart: "no"
     volumes:
       - ./db/migrations:/migrations:ro
