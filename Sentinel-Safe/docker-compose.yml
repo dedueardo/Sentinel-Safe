@@ -13,8 +13,7 @@ services:
       # Volume para persistir os dados do banco de dados
       - db_data:/var/lib/mysql
 
-      # INICIALIZAÇÃO: Monta seu script init.sql. O MySQL o executará automaticamente
-      # na primeira vez que o banco de dados for criado.
+      # INICIALIZAÇÃO: O MySQL executará este script automaticamente na primeira vez
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
     healthcheck:
@@ -24,15 +23,19 @@ services:
       retries: 5
 
   db-migrate:
-    # CORREÇÃO: Usa a imagem customizada que você deve criar, a qual contém seus scripts de migração.
     image: redarsene/sentinel-safe-db-migrate:latest
+    # CORREÇÃO: depends_on alterado para o formato de lista simples
     depends_on:
-      db:
-        condition: service_healthy # Espera o DB estar 100% pronto antes de rodar as migrações
+      - db
     restart: "no"
     entrypoint: [ "/bin/sh", "-c" ]
     command: |
-      echo 'DB is healthy. Running migrations...';
+      echo 'Waiting for MySQL server to be ready...';
+      # Este loop de espera manual substitui a necessidade do "condition: service_healthy"
+      until mysqladmin ping -h "db" -P 3306 -u"root" -p"$$MYSQL_ROOT_PASSWORD" --silent; do
+        echo -n '.'; sleep 2;
+      done;
+      echo ' DB is ready. Running migrations...';
       set -e;
       # MIGRAÇÃO: Este loop executa os scripts da pasta /migrations que estão dentro da imagem.
       for f in /docker-entrypoint-migrations.d/*.sql; do
@@ -45,9 +48,9 @@ services:
   backend:
     image: redarsene/sentinel-safe-backend:latest
     restart: always
+    # CORREÇÃO: depends_on alterado para o formato de lista simples
     depends_on:
-      db-migrate:
-        condition: service_completed_successfully # SÓ INICIA DEPOIS que as migrações terminarem com sucesso
+      - db-migrate
     environment:
       DB_HOST: db
       DB_USER: sentinel
