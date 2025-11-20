@@ -1,0 +1,92 @@
+version: '3.9'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: sentinel_safe_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: sentinel_safe
+      MYSQL_USER: sentinel
+      MYSQL_PASSWORD: sentinel
+    ports:
+      - '3306:3306'
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: [ "CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  db-migrate:
+    image: mysql:8.0
+    container_name: sentinel_safe_db_migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    volumes:
+      - ./db/migrations:/migrations:ro
+    entrypoint: [ "/bin/sh", "-c" ]
+    command: |
+      echo 'Waiting for MySQL over TCP...';
+      until mysql --protocol=tcp -h db -P 3306 -uroot -proot -e "SELECT 1" >/dev/null 2>&1; do
+        echo -n '.'; sleep 2;
+      done;
+      echo ' DB is up.';
+      mysql --protocol=tcp -h db -P 3306 -uroot -proot -e 'CREATE DATABASE IF NOT EXISTS sentinel_safe;';
+      set -e;
+      for f in /migrations/*.sql; do
+        if [ ! -e "$$f" ]; then echo "No migrations to run"; break; fi;
+        echo Running "$$f";
+        mysql --protocol=tcp -h db -P 3306 -uroot -proot sentinel_safe < "$$f" || exit 1;
+      done;
+      echo 'Migrations done.'
+
+  backend:
+    build: ./backend
+    container_name: sentinel_safe_backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+    env_file:
+      - ./backend/.env.docker
+    environment:
+      DB_HOST: db
+      DB_USER: sentinel
+      DB_PASSWORD: sentinel
+      DB_DATABASE: sentinel_safe
+      PORT: 3000
+      NODE_ENV: production
+      STREAM_BASE_PORT: 3100
+      STREAM_PROBESIZE: 20000000
+      STREAM_ANALYZE_DURATION: 5000000
+      STREAM_OUTPUT_CODEC: copy
+      STREAM_OUTPUT_RESOLUTION: 352x240
+      STREAM_OUTPUT_BITRATE: 1200k
+    ports:
+      - '3000:3000'
+      - '3100-3199:3100-3199'
+
+  frontend:
+    build: ./frontend
+    container_name: sentinel_safe_frontend
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: http://backend:3000/api
+      VITE_WS_URL: ws://backend:3000
+    ports:
+      - '5173:80'
+
+volumes:
+  db_data:

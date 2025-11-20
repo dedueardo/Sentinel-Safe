@@ -7,7 +7,7 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { useNotifications } from './NotificationContext';
 
 // Definindo o tipo de dados que o formulário envia para clareza
-type CameraFormData = Omit<Camera, 'id' | 'status' | 'lastUpdated' | 'streamUrl' | 'display_order'>;
+export type CameraFormData = Omit<Camera, 'id' | 'status' | 'lastUpdated' | 'streamUrl' | 'display_order'>;
 
 interface CameraContextData {
   cameras: Camera[];

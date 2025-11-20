@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useCameras } from '../contexts/CameraContext';
 import type { Camera } from '../types/camera';
+import type { CameraFormData } from '../contexts/CameraContext';
 import Modal from '../components/common/Modal';
 import CameraForm from '../components/cameras/CameraForm';
 import { Plus, Edit, Trash2 } from 'lucide-react';
@@ -28,7 +29,7 @@ function CameraManagement() {
   };
 
   // Função de 'submit' que decide se deve criar ou atualizar
-  const handleFormSubmit = async (data: Omit<Camera, 'id' | 'status' | 'lastUpdated'>) => {
+  const handleFormSubmit = async (data: CameraFormData) => {
     if (editingCamera) {
       // Modo de Edição
       await updateCamera(editingCamera.id.toString(), data);
