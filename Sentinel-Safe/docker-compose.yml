@@ -26,7 +26,6 @@ services:
 
   db:
     image: mysql:8.0
-    restart: always
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: sentinel_safe
@@ -60,7 +59,6 @@ services:
 
   backend:
     image: redarsene/sentinel-safe-backend:latest
-    restart: always
     depends_on:
       - db-migrate
     environment:
@@ -82,7 +80,6 @@ services:
 
   frontend:
     image: redarsene/sentinel-safe-frontend:latest
-    restart: always
     depends_on:
       - backend
     networks:
@@ -102,6 +99,6 @@ volumes:
 
 networks:
   internal:
-    driver: bridge
+    driver: overlay
   web:
-    driver: bridge
+    driver: overlay
