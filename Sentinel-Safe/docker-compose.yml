@@ -54,8 +54,6 @@ services:
     depends_on:
       - db
       - db-migrate
-    env_file:
-      - ./backend/.env.docker
     environment:
       DB_HOST: db
       DB_USER: sentinel
