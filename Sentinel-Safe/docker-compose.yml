@@ -9,37 +9,45 @@ services:
       MYSQL_DATABASE: sentinel_safe
       MYSQL_USER: sentinel
       MYSQL_PASSWORD: sentinel
-    ports:
-      - '3306:3306'
     volumes:
+      # Volume para persistir os dados do banco de dados
       - db_data:/var/lib/mysql
-    command: --default-authentication-plugin=mysql_native_password
+
+      # INICIALIZAÇÃO: Monta seu script init.sql. O MySQL o executará automaticamente
+      # na primeira vez que o banco de dados for criado.
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
     healthcheck:
       test: [ "CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent" ]
-      interval: 5s
+      interval: 10s
       timeout: 5s
-      retries: 20
-      start_period: 20s
+      retries: 5
 
   db-migrate:
-    image: mysql:8.0
+    # CORREÇÃO: Usa a imagem customizada que você deve criar, a qual contém seus scripts de migração.
+    image: redarsene/sentinel-safe-db-migrate:latest
     depends_on:
-      - db
+      db:
+        condition: service_healthy # Espera o DB estar 100% pronto antes de rodar as migrações
     restart: "no"
     entrypoint: [ "/bin/sh", "-c" ]
     command: |
-      echo 'Waiting for MySQL over TCP...';
-      until mysql --protocol=tcp -h db -P 3306 -uroot -proot -e "SELECT 1" >/dev/null 2>&1; do
-        echo -n '.'; sleep 2;
+      echo 'DB is healthy. Running migrations...';
+      set -e;
+      # MIGRAÇÃO: Este loop executa os scripts da pasta /migrations que estão dentro da imagem.
+      for f in /docker-entrypoint-migrations.d/*.sql; do
+        if [ ! -f "$$f" ]; then echo "No migrations to run"; break; fi;
+        echo "Running migration: $$f";
+        mysql --protocol=tcp -h db -P 3306 -uroot -proot sentinel_safe < "$$f";
       done;
-      echo ' DB is up. Migration scripts were not found in this environment and were skipped.';
+      echo 'Migrations completed successfully.';
 
   backend:
     image: redarsene/sentinel-safe-backend:latest
     restart: always
     depends_on:
-      - db
-      - db-migrate
+      db-migrate:
+        condition: service_completed_successfully # SÓ INICIA DEPOIS que as migrações terminarem com sucesso
     environment:
       DB_HOST: db
       DB_USER: sentinel
@@ -47,12 +55,7 @@ services:
       DB_DATABASE: sentinel_safe
       PORT: 3000
       NODE_ENV: production
-      STREAM_BASE_PORT: 3100
-      STREAM_PROBESIZE: 20000000
-      STREAM_ANALYZE_DURATION: 5000000
-      STREAM_OUTPUT_CODEC: copy
-      STREAM_OUTPUT_RESOLUTION: 352x240
-      STREAM_OUTPUT_BITRATE: 1200k
+      # ... (suas outras variáveis de ambiente)
     ports:
       - '3000:3000'
       - '3100-3199:3100-3199'
