@@ -12,7 +12,7 @@ services:
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
       - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
-      - "--certificatesresolvers.myresolver.acme.email=danijrs1000@gmail.com" # <-- MUDE ISTO PARA O SEU EMAIL
+      - "--certificatesresolvers.myresolver.acme.email=danijrs1000@gmail.com"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
     ports:
       - "80:80"
@@ -40,7 +40,6 @@ services:
     image: redarsene/sentinel-safe-db-migrate:latest
     depends_on:
       - db
-    restart: "no"
     command: >
       /bin/sh -c "
         echo 'Waiting for MySQL server...';
