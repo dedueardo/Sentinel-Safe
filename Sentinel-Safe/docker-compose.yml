@@ -1,6 +1,29 @@
 version: '3.9'
 
 services:
+  traefik:
+    image: "traefik:v2.10"
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=danijrs1000@gmail.com" # <-- MUDE ISTO PARA O SEU EMAIL
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - traefik_certs:/letsencrypt
+    networks:
+      - web
+
   db:
     image: mysql:8.0
     restart: always
@@ -10,45 +33,34 @@ services:
       MYSQL_USER: sentinel
       MYSQL_PASSWORD: sentinel
     volumes:
-      # Volume para persistir os dados do banco de dados
       - db_data:/var/lib/mysql
-
-      # INICIALIZAÇÃO: O MySQL executará este script automaticamente na primeira vez
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-
-    healthcheck:
-      test: [ "CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    networks:
+      - internal
 
   db-migrate:
     image: redarsene/sentinel-safe-db-migrate:latest
-    # CORREÇÃO: depends_on alterado para o formato de lista simples
     depends_on:
       - db
     restart: "no"
-    entrypoint: [ "/bin/sh", "-c" ]
-    command: |
-      echo 'Waiting for MySQL server to be ready...';
-      # Este loop de espera manual substitui a necessidade do "condition: service_healthy"
-      until mysqladmin ping -h "db" -P 3306 -u"root" -p"$$MYSQL_ROOT_PASSWORD" --silent; do
-        echo -n '.'; sleep 2;
-      done;
-      echo ' DB is ready. Running migrations...';
-      set -e;
-      # MIGRAÇÃO: Este loop executa os scripts da pasta /migrations que estão dentro da imagem.
-      for f in /docker-entrypoint-migrations.d/*.sql; do
-        if [ ! -f "$$f" ]; then echo "No migrations to run"; break; fi;
-        echo "Running migration: $$f";
-        mysql --protocol=tcp -h db -P 3306 -uroot -proot sentinel_safe < "$$f";
-      done;
-      echo 'Migrations completed successfully.';
+    command: >
+      /bin/sh -c "
+        echo 'Waiting for MySQL server...';
+        until mysqladmin ping -h db -u root -p$$MYSQL_ROOT_PASSWORD --silent; do
+          echo -n '.'; sleep 2;
+        done;
+        echo ' DB is ready. Running all SQL scripts...';
+        for f in /sql-scripts/*.sql; do
+          echo \"Executing $$f...\";
+          mysql -h db -u root -p$$MYSQL_ROOT_PASSWORD sentinel_safe < \"$$f\";
+        done;
+        echo 'All database scripts executed successfully.';
+      "
+    networks:
+      - internal
 
   backend:
     image: redarsene/sentinel-safe-backend:latest
     restart: always
-    # CORREÇÃO: depends_on alterado para o formato de lista simples
     depends_on:
       - db-migrate
     environment:
@@ -58,21 +70,38 @@ services:
       DB_DATABASE: sentinel_safe
       PORT: 3000
       NODE_ENV: production
-      # ... (suas outras variáveis de ambiente)
-    ports:
-      - '3000:3000'
-      - '3100-3199:3100-3199'
+    networks:
+      - internal
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sentinel-backend.rule=Host(`sentinel.mahoraga.cloud`) && (PathPrefix(`/api`) || PathPrefix(`/ws-status`))"
+      - "traefik.http.routers.sentinel-backend.entrypoints=websecure"
+      - "traefik.http.routers.sentinel-backend.tls.certresolver=myresolver"
+      - "traefik.http.services.sentinel-backend.loadbalancer.server.port=3000"
 
   frontend:
     image: redarsene/sentinel-safe-frontend:latest
     restart: always
     depends_on:
       - backend
-    environment:
-      VITE_API_URL: http://backend:3000/api
-      VITE_WS_URL: ws://backend:3000
-    ports:
-      - '5173:80'
+    networks:
+      - internal
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sentinel-frontend.rule=Host(`sentinel.mahoraga.cloud`)"
+      - "traefik.http.routers.sentinel-frontend.entrypoints=websecure"
+      - "traefik.http.routers.sentinel-frontend.tls.certresolver=myresolver"
+      - "traefik.http.services.sentinel-frontend.loadbalancer.server.port=80"
 
 volumes:
   db_data:
+  traefik_certs:
+
+
+networks:
+  internal:
+    driver: bridge
+  web:
+    driver: bridge
