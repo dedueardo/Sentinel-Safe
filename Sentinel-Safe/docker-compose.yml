@@ -3,7 +3,6 @@ version: '3.9'
 services:
   db:
     image: mysql:8.0
-    container_name: sentinel_safe_db
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: root
@@ -14,7 +13,6 @@ services:
       - '3306:3306'
     volumes:
       - db_data:/var/lib/mysql
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     command: --default-authentication-plugin=mysql_native_password
     healthcheck:
       test: [ "CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent" ]
@@ -25,31 +23,19 @@ services:
 
   db-migrate:
     image: mysql:8.0
-    container_name: sentinel_safe_db_migrate
     depends_on:
       - db
     restart: "no"
-    volumes:
-      - ./db/migrations:/migrations:ro
     entrypoint: [ "/bin/sh", "-c" ]
     command: |
       echo 'Waiting for MySQL over TCP...';
       until mysql --protocol=tcp -h db -P 3306 -uroot -proot -e "SELECT 1" >/dev/null 2>&1; do
         echo -n '.'; sleep 2;
       done;
-      echo ' DB is up.';
-      mysql --protocol=tcp -h db -P 3306 -uroot -proot -e 'CREATE DATABASE IF NOT EXISTS sentinel_safe;';
-      set -e;
-      for f in /migrations/*.sql; do
-        if [ ! -e "$$f" ]; then echo "No migrations to run"; break; fi;
-        echo Running "$$f";
-        mysql --protocol=tcp -h db -P 3306 -uroot -proot sentinel_safe < "$$f" || exit 1;
-      done;
-      echo 'Migrations done.'
+      echo ' DB is up. Migration scripts were not found in this environment and were skipped.';
 
   backend:
-    build: ./backend
-    container_name: sentinel_safe_backend
+    image: redarsene/sentinel-safe-backend:latest
     restart: always
     depends_on:
       - db
@@ -72,8 +58,7 @@ services:
       - '3100-3199:3100-3199'
 
   frontend:
-    build: ./frontend
-    container_name: sentinel_safe_frontend
+    image: redarsene/sentinel-safe-frontend:latest
     restart: always
     depends_on:
       - backend
